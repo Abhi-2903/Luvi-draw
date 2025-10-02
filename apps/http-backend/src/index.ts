@@ -49,7 +49,20 @@ app.post("/signup", async(req, res)=>{
 return res.json({
     msg:"invalid data"
 })   
- }
+
+
+}
+const existingUser = await prismaClient.user.findFirst({
+    where: {
+        email: parsedData.data.username 
+    }
+});
+
+if (existingUser) {
+    return res.status(409).json({
+        msg: "User already exists"
+    });
+}
 try{
  const user = await prismaClient.user.create({
     data: { 
