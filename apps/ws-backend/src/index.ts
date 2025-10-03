@@ -1,6 +1,7 @@
 import { WebSocket, WebSocketServer } from "ws";
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import { JWT_SECRET } from '@repo/backend-common/config';
+import { prismaClient } from '@repo/db/client';
 
 const wss = new WebSocketServer({port:8080});
 
@@ -64,12 +65,16 @@ wss.on('connection', function connection(ws, request){
             })
 
 
-    ws.on('message', function message(data: string){
+    ws.on('message', async function message(data: string){
         const parsedData= JSON.parse(data as unknown as string);
         
         if(parsedData.type == "join_room"){
             const user= users.find(x=>x.ws ===ws)
-                user?.rooms.push(parsedData.roomId);
+                if (typeof parsedData.roomId === 'number' && Number.isInteger(parsedData.roomId)) {
+                    user?.rooms.push(parsedData.roomId.toString());
+                } else {
+                    ws.send(JSON.stringify({ type: 'error', message: 'roomId must be an integer' }));
+                }
                 console.log(`user subscribed ${parsedData.roomId}`)
             }
 
@@ -82,6 +87,13 @@ wss.on('connection', function connection(ws, request){
             const roomId = parsedData.roomId;
             const message = parsedData.message;
 
+            await prismaClient.chat.create({
+                data:{
+                    roomId,
+                    message,
+                    userId
+                }
+            })
             users.forEach(user=>{
                 if(user.rooms.includes(roomId)){
                     user.ws.send(JSON.stringify({
@@ -91,7 +103,7 @@ wss.on('connection', function connection(ws, request){
                     }))
                 }
             })
-
+ 
         }
     
     });
