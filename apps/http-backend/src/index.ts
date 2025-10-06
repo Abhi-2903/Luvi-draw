@@ -5,8 +5,9 @@ import { middleware } from "./middleware";
 import { JWT_SECRET } from '@repo/backend-common/config';
 import { CreateRoomSchema, CreateUserSchema, SignInSchema } from '@repo/common/types';
 import { prismaClient } from '@repo/db/client';
+import bcrypt from 'bcrypt';
 const app = express();
-CreateUserSchema
+
 
 app.use(express.json());
 
@@ -22,9 +23,7 @@ app.post("/signin", async (req, res)=>{
 
         const user = await prismaClient.user.findFirst({
             where:{
-                email: parsedData.data.username,
-                password: parsedData.data.password 
-            }
+                email: parsedData.data.username,            }
         })
         if(!user)
         {
@@ -33,6 +32,11 @@ app.post("/signin", async (req, res)=>{
             })
             return;
         }
+        const passwordMatch = await bcrypt.compare(parsedData.data.password, user.password);
+        if(!passwordMatch){
+             res.status(403).json({
+                msg:"invalid password"})
+             }
     const token=jwt.sign({
          userId : user.id 
      }, JWT_SECRET);
@@ -57,19 +61,22 @@ const existingUser = await prismaClient.user.findFirst({
         email: parsedData.data.username 
     }
 });
-
+// Hash the password with bcrypt
+const saltRounds = 10;
+const hashedPassword = await bcrypt.hash(parsedData.data.password, saltRounds);
 if (existingUser) {
     return res.status(409).json({
         msg: "User already exists"
     });
 }
 try{
+    
  const user = await prismaClient.user.create({
     data: { 
         email: parsedData.data.username,
         name: parsedData.data.name,
         //password ki hashing krni hai
-        password: parsedData.data.password,
+        password: hashedPassword,
     }
  })
  res.json({
@@ -133,6 +140,15 @@ app.get("/chat/:roomId", async (req,res)=>
     })
     res.json(chats
     )
+})
+
+app.get("/room/:slug", async(req,res)=>{
+    const slug = req.params.slug;
+    const room = await prismaClient.room.findFirst({
+        where:{
+            slug
+        }
+    })
 })
 
 app.listen(3001,()=>{
